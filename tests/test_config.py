@@ -9,6 +9,7 @@ from fraud.config import (
     PROJECT_ROOT,
     Settings,
     get_settings,
+KAGGLE_ENV_VAR
 )
 
 # Every environment variable that can change Settings. Removed before each
@@ -43,7 +44,7 @@ def test_local_defaults():
 
 
 def test_kaggle_defaults(monkeypatch):
-    monkeypatch.setenv("KAGGLE_ENV_VAR", "test-run")
+    monkeypatch.setenv(KAGGLE_ENV_VAR, "Interactive")
     settings = get_settings()
     assert settings.raw_dir == KAGGLE_INPUT_DIR
     assert settings.processed_dir == KAGGLE_WORKING_DIR
@@ -55,7 +56,7 @@ def test_env_var_overrides_default(monkeypatch, tmp_path):
 
 
 def test_env_var_overrides_kaggle_default(monkeypatch, tmp_path):
-    monkeypatch.setenv("KAGGLE_ENV_VAR", "test-run")
+    monkeypatch.setenv(KAGGLE_ENV_VAR, "Interactive")
     monkeypatch.setenv("RAW_DIR", str(tmp_path))
     assert get_settings().raw_dir == tmp_path
 
