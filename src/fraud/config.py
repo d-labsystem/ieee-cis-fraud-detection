@@ -16,7 +16,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # code that runs on Kaggle must never use paths derived from PROJECT_ROOT.
 PROJECT_ROOT: Path = Path(__file__).resolve().parents[2]
 
-KAGGLE_INPUT_DIR: Path = Path("/kaggle/input/ieee-fraud-detection")
+KAGGLE_INPUT_DIR: Path = Path("/kaggle/input/competitions/ieee-fraud-detection")
 KAGGLE_WORKING_DIR: Path = Path("/kaggle/working")
 
 KAGGLE_ENV_VAR = "KAGGLE_KERNEL_RUN_TYPE"
