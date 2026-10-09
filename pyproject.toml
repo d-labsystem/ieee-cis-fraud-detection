@@ -1,0 +1,24 @@
+[project]
+name = "fraud-detection"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "pandas==2.3.3",
+    "scikit-learn==1.6.1",
+    "xgboost==3.4.1",
+    "shap==0.52.0",
+    "matplotlib==3.10.0",
+    "pyarrow==23.0.1",
+    "pydantic==2.13.5",
+    "pydantic-settings>=2.4",
+]
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

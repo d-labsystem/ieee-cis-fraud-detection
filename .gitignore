@@ -1,0 +1,9 @@
+data/
+*.zip
+*.parquet
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+.env
+.pytest_cache/
+.idea/

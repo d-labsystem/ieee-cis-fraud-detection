@@ -1,0 +1,11 @@
+pandas==2.3.3
+scikit-learn==1.6.1
+xgboost==3.4.1
+shap==0.52.0
+matplotlib==3.10.0
+pyarrow==23.0.1
+pydantic==2.13.5
+pydantic-settings>=2.4
+
+[dev]
+pytest
