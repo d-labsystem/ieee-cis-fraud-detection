@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fraud.drift import adversarial_validation, psi, psi_table, week_scores
+from fraud.drift import adversarial_validation, psi, psi_table, segment_week_scores, week_scores
 
 
 @pytest.fixture(scope="module")
@@ -73,3 +73,24 @@ def test_week_scores():
     assert out.index.tolist() == [0, 1]
     assert out["first_day"].tolist() == [121, 128]
     assert out["roc_auc"].tolist() == pytest.approx([1, 1])
+
+
+def test_segment_week_scores_align_weeks():
+    # "late" only starts on day 130, i.e. in week 1 of the full period.
+    day = np.r_[np.repeat(np.arange(121, 135), 10), np.repeat(np.arange(130, 135), 10)]
+    y = np.r_[np.tile([1] + [0] * 9, 14), np.tile([1] + [0] * 9, 5)]
+    prob = np.where(y == 1, 0.9, 0.1)
+    segment = np.r_[["early"] * 140, ["late"] * 50]
+    out = segment_week_scores(y, prob, day, segment)
+    assert out.index.tolist() == [(0, "early"), (1, "early"), (1, "late")]
+    # Week 1 (days 128-134): 70 early rows + 50 late rows.
+    assert out.loc[(1, "late"), "share_of_week"] == pytest.approx(50 / 120)
+    assert out.loc[(0, "early"), "share_of_week"] == pytest.approx(1)
+
+
+def test_week_scores_keeps_single_class_weeks():
+    day = np.repeat([121, 128], 5)
+    y = np.r_[[1, 0, 0, 0, 0], [0] * 5]  # no fraud in week 1
+    out = week_scores(y, np.linspace(0, 1, 10), day)
+    assert out["transactions"].tolist() == [5, 5]
+    assert np.isnan(out.loc[1, "roc_auc"])

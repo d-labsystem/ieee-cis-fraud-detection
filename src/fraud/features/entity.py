@@ -17,6 +17,7 @@ Two numbers per entity, both causal (earlier rows only):
 
 import numpy as np
 import pandas as pd
+from scipy.stats import rankdata
 
 from fraud.data.load import SECONDS_PER_DAY
 from fraud.features.windows import window_counts
@@ -67,4 +68,49 @@ def add_entity_features(df: pd.DataFrame) -> pd.DataFrame:
         share[missing | (total_30d == 0)] = np.nan
         out[f"{prefix}_n_24h"] = n_24h
         out[f"{prefix}_share_30d"] = share.astype(np.float32)
+    return out
+
+
+RANK_DAYS = 30
+
+
+def _daily_rank(day: np.ndarray, codes: np.ndarray, missing: np.ndarray) -> np.ndarray:
+    """Per row: popularity rank of its entity over the previous ``RANK_DAYS`` days.
+
+    1 = the most common entity in that window; ties share the best rank; an
+    entity not seen in the window ranks after every seen one. The current day
+    is excluded, so the rank is causal at day granularity. Missing values are
+    not an entity and are not counted; rows on a day with an empty window
+    (the first day of data) get NaN.
+    """
+    d = day - day.min()
+    counts = np.zeros((d.max() + 1, codes.max() + 1), dtype=np.int32)
+    np.add.at(counts, (d[~missing], codes[~missing]), 1)
+    cum = np.vstack([np.zeros((1, counts.shape[1]), dtype=np.int64), np.cumsum(counts, axis=0)])
+    days = np.arange(counts.shape[0])
+    window = cum[days] - cum[np.maximum(days - RANK_DAYS, 0)]  # days [d - 30, d - 1]
+    ranks = rankdata(-window, axis=1, method="min").astype(np.float32)
+    ranks[window.sum(axis=1) == 0] = np.nan
+    return ranks[d, codes]
+
+
+def add_entity_rank_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Replace each ``<entity>_share_30d`` with ``<entity>_rank_30d`` (Phase 7e).
+
+    A share drifts with volume: gmail is 38% of traffic in one month and 41%
+    in the next, so the exact share also tells the model *when* a row is from
+    (PSI 3.4, a top separator in adversarial validation). The rank (gmail is
+    #1 either way) keeps "how common is this entity" without the clock.
+    """
+    out = df.copy(deep=False)
+    keys = out.assign(
+        _amt_milli=(out["TransactionAmt"].astype(np.float64) * 1000).round().astype(np.int64)
+    )
+    day = out["day"].to_numpy(dtype=np.int64)
+    for prefix, cols in ENTITIES.items():
+        codes, missing = _entity_codes(keys, cols)
+        rank = _daily_rank(day, codes, missing)
+        rank[missing] = np.nan
+        out[f"{prefix}_rank_30d"] = rank
+        out = out.drop(columns=f"{prefix}_share_30d")
     return out

@@ -90,16 +90,39 @@ def adversarial_validation(
     return float(auc), share.sort_values(ascending=False).rename("gain_%")
 
 
-def week_scores(y: np.ndarray, prob: np.ndarray, day: np.ndarray) -> pd.DataFrame:
-    """ROC-AUC / PR-AUC per 7-day week, counted from the first day given."""
-    day = np.asarray(day)
-    week = (day - day.min()) // 7
+def week_scores(
+    y: np.ndarray, prob: np.ndarray, day: np.ndarray, start: int | None = None
+) -> pd.DataFrame:
+    """ROC-AUC / PR-AUC per 7-day week, counted from ``start`` (default: first day given).
+
+    Weeks with only one class (no frauds, or only frauds) get NaN scores.
+    """
+    y, prob, day = np.asarray(y), np.asarray(prob), np.asarray(day)
+    week = (day - (day.min() if start is None else start)) // 7
     rows = {}
     for w in np.unique(week):
         mask = week == w
-        if 0 < y[mask].sum() < mask.sum():
-            s = score(y[mask], prob[mask])
-            rows[int(w)] = {"first_day": int(day[mask].min()), "transactions": s.n_transactions,
-                            "fraud_rate": s.prevalence, "roc_auc": s.roc_auc, "pr_auc": s.pr_auc,
-                            "pr_lift": s.pr_lift}
+        s = score(y[mask], prob[mask]) if 0 < y[mask].sum() < mask.sum() else None
+        rows[int(w)] = {"first_day": int(day[mask].min()), "transactions": int(mask.sum()),
+                        "fraud_rate": y[mask].mean(),
+                        "roc_auc": s.roc_auc if s else np.nan, "pr_auc": s.pr_auc if s else np.nan,
+                        "pr_lift": s.pr_lift if s else np.nan}
     return pd.DataFrame(rows).T.rename_axis("week")
+
+def segment_week_scores(
+    y: np.ndarray, prob: np.ndarray, day: np.ndarray, segment: np.ndarray
+) -> pd.DataFrame:
+    """``week_scores`` per segment, plus each segment's share of the week's rows.
+
+    Weeks count from the first day overall, so they line up across segments.
+    """
+    y, prob, day, segment = map(np.asarray, (y, prob, day, segment))
+    start = int(day.min())
+    rows_per_week = pd.Series((day - start) // 7).value_counts()
+    parts = []
+    for name in pd.unique(segment):
+        mask = segment == name
+        scores = week_scores(y[mask], prob[mask], day[mask], start=start)
+        scores["share_of_week"] = scores["transactions"] / rows_per_week.reindex(scores.index)
+        parts.append(scores.assign(segment=name).set_index("segment", append=True))
+    return pd.concat(parts).sort_index()

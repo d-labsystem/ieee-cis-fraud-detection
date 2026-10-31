@@ -15,16 +15,18 @@ from fraud.features.client import add_client_features
 from fraud.features.clock import add_hour
 from fraud.features.device import add_device_features
 from fraud.features.dnorm import add_dnorm_features
-from fraud.features.entity import add_entity_features
+from fraud.features.entity import add_entity_features, add_entity_rank_features
 from fraud.features.missing import add_missing_features
 from fraud.features.vreduce import drop_correlated_v
 
 # Steps always run in this order, whatever order they are given in. Order
 # matters: "client" and "missing" read raw D columns, which "dnorm_replace"
-# drops; "entity" reads raw id_30 / id_31 / DeviceInfo, which "device" drops.
+# drops; "entity" and "entity_rank" read raw id_30 / id_31 / DeviceInfo, which
+# "device" drops.
 STEPS = {
     "client": add_client_features,
     "entity": add_entity_features,
+    "entity_rank": add_entity_rank_features,  # replaces entity's *_share_30d
     "missing": add_missing_features,
     "dnorm": add_dnorm_features,
     "dnorm_replace": partial(add_dnorm_features, replace=True),
@@ -47,6 +49,8 @@ def ordered_steps(steps: Iterable[str]) -> list[str]:
         raise ValueError(f"Unknown steps: {sorted(unknown)}")
     if {"dnorm", "dnorm_replace"} <= steps:
         raise ValueError("Choose either dnorm or dnorm_replace, not both.")
+    if "entity_rank" in steps and "entity" not in steps:
+        raise ValueError("entity_rank replaces columns made by entity: add entity too.")
     return [s for s in STEPS if s in steps]
 
 

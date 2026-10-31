@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from fraud.data.load import SECONDS_PER_DAY
-from fraud.features.entity import ENTITIES, add_entity_features
+from fraud.features.entity import ENTITIES, add_entity_features, add_entity_rank_features
 from fraud.features.windows import window_counts
 
 DAY = SECONDS_PER_DAY
@@ -96,3 +96,52 @@ def test_future_rows_do_not_change_past_features():
     future = _df(dt=[DAY + 20], amt=[5.0], card1=[1])
     after = add_entity_features(pd.concat([df, future], ignore_index=True))
     pd.testing.assert_frame_equal(after.iloc[:2], before)
+
+
+# ---------- entity rank (Phase 7e) ----------
+
+
+def _rank_df(days, emails) -> pd.DataFrame:
+    df = _df([d * DAY for d in days], [10.0] * len(days), P_emaildomain=emails)
+    return add_entity_features(df.assign(day=days))
+
+
+def test_rank_replaces_share_and_is_causal():
+    days = [1, 1, 1, 2, 2, 2, 3]
+    emails = ["gmail", "gmail", "yahoo", "yahoo", "yahoo", "gmail", "yahoo"]
+    out = add_entity_rank_features(_rank_df(days, emails))
+    assert "P_email_rank_30d" in out and "P_email_share_30d" not in out
+    rank = out["P_email_rank_30d"].tolist()
+    # Day 1: nothing earlier -> NaN. Day 2 sees day 1 (gmail 2, yahoo 1).
+    assert np.isnan(rank[:3]).all()
+    assert rank[3:6] == [2, 2, 1]
+    # Day 3 sees days 1-2: yahoo 3, gmail 3 -> tie, both rank 1.
+    assert rank[6] == 1
+
+
+def test_rank_ignores_missing_and_ranks_unseen_last():
+    days = [1, 1, 1, 1, 2, 2]
+    emails = [np.nan, np.nan, np.nan, "gmail", "aol", np.nan]
+    rank = add_entity_rank_features(_rank_df(days, emails))["P_email_rank_30d"].tolist()
+    assert rank[4] == 2   # aol unseen in the window: after gmail, not after the 3 missing rows
+    assert np.isnan(rank[5])
+
+
+def test_rank_window_is_30_days():
+    days = [1, 40, 40]
+    emails = ["aol", "gmail", "aol"]
+    # On day 40 the window is days 10-39: day 1's aol row has dropped out.
+    rank = add_entity_rank_features(_rank_df(days, emails))["P_email_rank_30d"].tolist()
+    assert np.isnan(rank[1:]).all()
+
+
+def test_rank_is_stable_when_volume_grows():
+    """The point of 7e: yahoo's share moves from 60% to 70%, its rank stays 1."""
+    days = list(np.repeat(np.arange(1, 21), 10))
+    emails = (["gmail"] * 4 + ["yahoo"] * 6) * 10 + (["gmail"] * 3 + ["yahoo"] * 7) * 10
+    df = _rank_df(days, emails)
+    out = add_entity_rank_features(df)
+    yahoo = (out["P_emaildomain"] == "yahoo") & (out["day"] >= 2)
+    assert out.loc[yahoo, "P_email_rank_30d"].eq(1).all()
+    share = df.loc[yahoo, "P_email_share_30d"]
+    assert share.iloc[-1] - share.iloc[0] > 0.05
