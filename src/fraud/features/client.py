@@ -17,32 +17,18 @@ import numpy as np
 import pandas as pd
 
 from fraud.data.load import SECONDS_PER_DAY
+from fraud.features.windows import window_counts
 
 KEY_COLS: tuple[str, ...] = ("card1", "addr1", "D1n")
 
 # Look-back windows for velocity counts, in seconds.
 WINDOWS: dict[str, int] = {"1h": 3_600, "24h": SECONDS_PER_DAY, "7d": 7 * SECONDS_PER_DAY}
 
-# uid * stride + TransactionDT must sort by uid first, then time. The stride
-# must exceed every TransactionDT (train + Kaggle test reach ~3.4e7 seconds).
-_KEY_STRIDE = 10**9
-
 
 def client_id(df: pd.DataFrame) -> np.ndarray:
     """Integer client id per row. Missing key parts (e.g. addr1, absent for
     most of product C) form their own group instead of dropping the row."""
     return df.groupby(list(KEY_COLS), dropna=False, sort=False).ngroup().to_numpy()
-
-
-def _window_counts(uid: np.ndarray, dt: np.ndarray, seconds: int) -> np.ndarray:
-    """Per row, how many earlier rows of the same client fall in [dt - seconds, dt].
-
-    Inputs must be sorted by (uid, dt). Encoding both into one sorted key lets
-    a single binary search find each window's start for all rows at once.
-    """
-    key = uid.astype(np.int64) * _KEY_STRIDE + dt
-    start = np.searchsorted(key, key - seconds, side="left")
-    return np.arange(len(key)) - start
 
 
 def add_client_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -55,8 +41,6 @@ def add_client_features(df: pd.DataFrame) -> pd.DataFrame:
 
     uid = client_id(out)
     dt = out["TransactionDT"].to_numpy(dtype=np.int64)
-    if dt.max() >= _KEY_STRIDE:
-        raise ValueError(f"TransactionDT must be below {_KEY_STRIDE:,}.")
 
     # Work in (client, time) order; `inverse` maps results back to df's order.
     order = np.lexsort((dt, uid))
@@ -96,11 +80,10 @@ def add_client_features(df: pd.DataFrame) -> pd.DataFrame:
         "uid_days_since_prev": by_uid["dt"].diff().to_numpy() / SECONDS_PER_DAY,
         "uid_n_emails_prev": emails_prev,
         "uid_new_email": first_email & (n_prev > 0),
-        **{
-            f"uid_n_{name}": _window_counts(s["uid"].to_numpy(), s["dt"].to_numpy(), seconds)
-            for name, seconds in WINDOWS.items()
-        },
     }
     for name, values in features.items():
         out[name] = np.asarray(values, dtype=np.float32)[inverse]
+    # Velocity: window_counts works in input order, so no `inverse` needed.
+    for name, seconds in WINDOWS.items():
+        out[f"uid_n_{name}"] = window_counts(uid, dt, seconds).astype(np.float32)
     return out
