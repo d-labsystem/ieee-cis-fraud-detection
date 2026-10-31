@@ -26,6 +26,7 @@ import pandas as pd
 from fraud.baseline import TARGET, train_baseline
 from fraud.config import get_settings
 from fraud.features.client import add_client_features
+from fraud.features.clock import add_hour
 from fraud.features.dnorm import add_dnorm_features
 from fraud.features.entity import add_entity_features
 from fraud.features.missing import add_missing_features
@@ -42,6 +43,7 @@ STEPS = {
     "dnorm": add_dnorm_features,
     "dnorm_replace": partial(add_dnorm_features, replace=True),
     "vreduce": drop_correlated_v,
+    "hour": add_hour,
 }
 
 
