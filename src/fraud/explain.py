@@ -100,3 +100,65 @@ def family_importance(importance: pd.DataFrame) -> pd.DataFrame:
         .agg(features=("share_%", "size"), share_pct=("share_%", "sum"))
         .sort_values("share_pct", ascending=False)
     )
+
+
+def category_effects(
+    shap: pd.DataFrame, X: pd.DataFrame, y: pd.Series, col: str, top: int = 10
+) -> pd.DataFrame:
+    """Mean push per category of a categorical feature, most common first.
+
+    Beeswarm colours treat categories as their (alphabetical) codes, which
+    means nothing; this table is the right way to read a categorical feature.
+    """
+    frame = pd.DataFrame({
+        "value": X[col].astype(object).where(X[col].notna(), "<missing>"),
+        "shap": shap[col].to_numpy(),
+        "isFraud": y.to_numpy(),
+    })
+    out = frame.groupby("value").agg(
+        transactions=("shap", "size"), fraud_rate=("isFraud", "mean"), mean_shap=("shap", "mean")
+    )
+    return out.sort_values("transactions", ascending=False).head(top)
+
+
+def _readable(value) -> str:
+    if pd.isna(value):
+        return "missing"
+    if isinstance(value, (float, np.floating)):
+        return f"{value:.4g}"
+    return str(value)
+
+
+def reasons(shap_row: pd.Series, x_row: pd.Series, top: int = 8) -> pd.DataFrame:
+    """The ``top`` features that moved one transaction's score most, either way."""
+    contrib = shap_row.drop(BIAS)
+    order = contrib.abs().sort_values(ascending=False).index[:top]
+    return pd.DataFrame({
+        "value": [_readable(x_row[f]) for f in order],
+        "push": contrib[order].to_numpy(),
+        "direction": np.where(contrib[order] > 0, "-> more fraud-like", "-> less fraud-like"),
+    }, index=pd.Index(order, name="feature"))
+
+
+def pick_cases(pred: pd.DataFrame, alert_share: float) -> dict[str, int]:
+    """Positions (in ``pred``) of three teaching cases.
+
+    ``alert_share`` is the fraction of transactions an analyst team reviews;
+    the threshold is the score at that cut-off.
+
+    - caught fraud: the highest-scoring real fraud
+    - false alarm:  the highest-scoring legitimate transaction
+    - missed fraud: a real fraud below the threshold, at the median score
+      of all missed frauds (a typical miss, not the most extreme one)
+    """
+    prob, fraud = pred["prob"].to_numpy(), pred["isFraud"].to_numpy().astype(bool)
+    threshold = np.quantile(prob, 1 - alert_share)
+    missed = np.flatnonzero(fraud & (prob < threshold))
+    if not fraud.any() or fraud.all() or len(missed) == 0:
+        raise ValueError("Need frauds, legitimate rows and at least one missed fraud.")
+    typical_miss = missed[np.argsort(prob[missed])[len(missed) // 2]]
+    return {
+        "caught fraud": int(np.flatnonzero(fraud)[np.argmax(prob[fraud])]),
+        "false alarm": int(np.flatnonzero(~fraud)[np.argmax(prob[~fraud])]),
+        "missed fraud": int(typical_miss),
+    }

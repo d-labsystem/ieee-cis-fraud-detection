@@ -4,7 +4,16 @@ import pytest
 
 from fraud.baseline import train_baseline
 from fraud.data.load import SECONDS_PER_DAY, add_time_features
-from fraud.explain import BIAS, family_importance, feature_family, global_importance, shap_values
+from fraud.explain import (
+    BIAS,
+    category_effects,
+    family_importance,
+    feature_family,
+    global_importance,
+    pick_cases,
+    reasons,
+    shap_values,
+)
 from fraud.split import time_split
 
 
@@ -86,3 +95,36 @@ def test_family_shares_sum_to_100(trained):
     result, split, shap = trained
     fam = family_importance(global_importance(shap, split.valid))
     assert fam["share_pct"].sum() == pytest.approx(100)
+
+
+# ---------- local explanations ----------
+
+def test_category_effects_counts_and_means():
+    X = pd.DataFrame({"email": pd.Categorical(["a", "a", "b", None])})
+    shap = pd.DataFrame({"email": [0.2, 0.4, -1.0, 0.5], BIAS: 0.0})
+    out = category_effects(shap, X, pd.Series([1, 0, 0, 1]), "email")
+    assert out.loc["a"].tolist() == pytest.approx([2, 0.5, 0.3])
+    assert out.loc["<missing>", "mean_shap"] == pytest.approx(0.5)
+    assert out.index[0] == "a"  # most common first
+
+
+def test_reasons_sorted_by_absolute_push():
+    shap_row = pd.Series({"amt": 0.3, "hour": -0.9, "email": 0.1, BIAS: -3.0})
+    x_row = pd.Series({"amt": 450.0, "hour": np.nan, "email": "gmail.com"})
+    out = reasons(shap_row, x_row, top=2)
+    assert list(out.index) == ["hour", "amt"]
+    assert out.loc["hour", "value"] == "missing"
+    assert out.loc["hour", "direction"] == "-> less fraud-like"
+    assert out.loc["amt", "value"] == "450"
+
+
+def test_pick_cases():
+    pred = pd.DataFrame({
+        "prob":    [0.99, 0.95, 0.90, 0.50, 0.10, 0.05, 0.04, 0.01, 0.30, 0.02],
+        "isFraud": [1,    0,    1,    0,    1,    0,    1,    0,    0,    1],
+    })
+    cases = pick_cases(pred, alert_share=0.3)  # threshold = top 3 scores
+    assert cases["caught fraud"] == 0
+    assert cases["false alarm"] == 1
+    # Missed frauds (below threshold): scores 0.10, 0.04, 0.02 -> median 0.04.
+    assert cases["missed fraud"] == 6
