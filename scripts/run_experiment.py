@@ -28,15 +28,20 @@ from fraud.config import get_settings
 from fraud.features.client import add_client_features
 from fraud.features.dnorm import add_dnorm_features
 from fraud.features.entity import add_entity_features
+from fraud.features.missing import add_missing_features
+from fraud.features.vreduce import drop_correlated_v
 from fraud.metrics import score
 from fraud.split import time_split
 
-# Order matters: "client" reads raw D1, which "dnorm_replace" drops.
+# Order matters: "client" and "missing" read raw D columns, which
+# "dnorm_replace" drops.
 STEPS = {
     "client": add_client_features,
     "entity": add_entity_features,
+    "missing": add_missing_features,
     "dnorm": add_dnorm_features,
     "dnorm_replace": partial(add_dnorm_features, replace=True),
+    "vreduce": drop_correlated_v,
 }
 
 

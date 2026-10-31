@@ -22,7 +22,9 @@ TARGET = "isFraud"
 NON_FEATURES: tuple[str, ...] = (TARGET, "TransactionID", "TransactionDT", "day", "month")
 
 PARAMS: dict = {
-    "n_estimators": 2000,  # upper bound; early stopping picks the real number
+    # Upper bound; early stopping picks the real number. Raised from 2000 when
+    # dnorm_replace runs hit it. Runs that stopped earlier are unaffected.
+    "n_estimators": 5000,
     "learning_rate": 0.05,
     "max_depth": 8,
     "subsample": 0.8,
