@@ -27,7 +27,7 @@ from fraud.features.pipeline import FINAL_STEPS, build_features
 from fraud.split import time_split
 
 CATEGORICAL = ["ProductCD", "P_emaildomain", "R_emaildomain", "card6", "id_31", "browser", "os",
-               "device_brand", "DeviceType"]
+               "device_brand", "device_model", "DeviceType"]
 WATERFALL_FEATURES = 12
 
 

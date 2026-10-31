@@ -30,7 +30,7 @@ from fraud.features.pipeline import FINAL_STEPS, build_features, steps_name
 from fraud.split import Split, time_split
 
 PLOT_ROWS = 10_000  # beeswarm/dependence sample; all rows are used for the numbers
-DEPENDENCE = ["hour", "D1n", "card1_share_30d", "TransactionAmt", "uid_amt_ratio", "D15n"]
+DEPENDENCE = ["hour", "D1n", "card1_share_30d", "TransactionAmt", "uid_amt_ratio", "browser_versions_behind"]
 
 
 def numeric_view(X: pd.DataFrame) -> pd.DataFrame:

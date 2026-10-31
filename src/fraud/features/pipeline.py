@@ -33,9 +33,10 @@ STEPS = {
     "device": add_device_features,
 }
 
-# Phase 4 result (validation, 3 seeds): ROC-AUC 0.9308, PR-AUC 0.6361.
-# "missing" was neutral and "vreduce" hurt, so neither is included.
-FINAL_STEPS: tuple[str, ...] = ("client", "entity", "dnorm_replace", "hour")
+# Phase 4 result (validation, 3 seeds): ROC-AUC 0.9312, PR-AUC 0.6422.
+# "missing" was neutral and "vreduce" hurt, so neither is included. "device"
+# was kept for robustness to new browser versions (+0.006 PR on validation).
+FINAL_STEPS: tuple[str, ...] = ("client", "entity", "dnorm_replace", "hour", "device")
 
 
 def ordered_steps(steps: Iterable[str]) -> list[str]:
