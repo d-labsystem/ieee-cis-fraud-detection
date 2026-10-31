@@ -39,5 +39,6 @@ def test_baseline_learns_signal(split):
     assert result.features == ["signal", "noise", "product"]
     assert 0 <= result.best_iteration < 50
     assert result.valid_scores.n_transactions == len(split.valid)
+    assert result.valid_prob.shape == (len(split.valid),)
     assert result.valid_scores.roc_auc > 0.85
     assert result.valid_scores.pr_lift > 1.5

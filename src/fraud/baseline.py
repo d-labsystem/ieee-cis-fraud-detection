@@ -6,6 +6,7 @@ the validation month; the test month is not touched here.
 
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 import xgboost as xgb
 
@@ -45,6 +46,7 @@ class BaselineResult:
     model: xgb.XGBClassifier
     features: list[str]
     best_iteration: int
+    valid_prob: np.ndarray  # aligned with split.valid's rows
     valid_scores: Scores
 
 
@@ -70,5 +72,6 @@ def train_baseline(
         model=model,
         features=features,
         best_iteration=int(model.best_iteration),
+        valid_prob=valid_prob,
         valid_scores=score(split.valid[TARGET].to_numpy(), valid_prob),
     )

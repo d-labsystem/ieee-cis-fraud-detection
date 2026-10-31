@@ -38,8 +38,10 @@ def main() -> None:
     print(f"Valid ROC-AUC:  {s.roc_auc:.4f}")
     print(f"Valid PR-AUC:   {s.pr_auc:.4f}  (prevalence {s.prevalence:.2%}, lift {s.pr_lift:.1f}x)")
 
-    gain = pd.Series(result.model.get_booster().get_score(importance_type="gain"))
-    print(f"\nTop {TOP_FEATURES} features by gain:")
+    # total_gain, not "gain": XGBoost's "gain" is the average per split, which
+    # ranks a feature used in a few big splits above one used in thousands.
+    gain = pd.Series(result.model.get_booster().get_score(importance_type="total_gain"))
+    print(f"\nTop {TOP_FEATURES} features by total gain:")
     print(gain.sort_values(ascending=False).head(TOP_FEATURES).to_string(float_format="{:.1f}".format))
 
     settings.processed_dir.mkdir(parents=True, exist_ok=True)
