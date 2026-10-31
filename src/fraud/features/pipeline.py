@@ -13,13 +13,15 @@ import pandas as pd
 
 from fraud.features.client import add_client_features
 from fraud.features.clock import add_hour
+from fraud.features.device import add_device_features
 from fraud.features.dnorm import add_dnorm_features
 from fraud.features.entity import add_entity_features
 from fraud.features.missing import add_missing_features
 from fraud.features.vreduce import drop_correlated_v
 
 # Steps always run in this order, whatever order they are given in. Order
-# matters: "client" and "missing" read raw D columns, which "dnorm_replace" drops.
+# matters: "client" and "missing" read raw D columns, which "dnorm_replace"
+# drops; "entity" reads raw id_30 / id_31 / DeviceInfo, which "device" drops.
 STEPS = {
     "client": add_client_features,
     "entity": add_entity_features,
@@ -28,6 +30,7 @@ STEPS = {
     "dnorm_replace": partial(add_dnorm_features, replace=True),
     "vreduce": drop_correlated_v,
     "hour": add_hour,
+    "device": add_device_features,
 }
 
 # Phase 4 result (validation, 3 seeds): ROC-AUC 0.9308, PR-AUC 0.6361.

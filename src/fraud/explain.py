@@ -40,6 +40,7 @@ _FAMILIES: list[tuple[str, str]] = [
     (r"^D\d+n$", "4c normalised D (incl. D1n)"),
     (r"_(n_24h|share_30d)$", "4b entity frequency"),
     (r"^hour$", "4e hour"),
+    (r"^(browser|os)(_|$)|^device_(brand|model)$", "4f browser/OS/device"),
     (r"^V\d+$", "raw V"),
     (r"^C\d+$", "raw C"),
     (r"^D\d+$", "raw D (gaps)"),

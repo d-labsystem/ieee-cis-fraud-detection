@@ -26,7 +26,8 @@ from fraud.explain import BIAS, category_effects, pick_cases, reasons
 from fraud.features.pipeline import FINAL_STEPS, build_features
 from fraud.split import time_split
 
-CATEGORICAL = ["ProductCD", "P_emaildomain", "R_emaildomain", "card6", "id_31", "DeviceType"]
+CATEGORICAL = ["ProductCD", "P_emaildomain", "R_emaildomain", "card6", "id_31", "browser", "os",
+               "device_brand", "DeviceType"]
 WATERFALL_FEATURES = 12
 
 
