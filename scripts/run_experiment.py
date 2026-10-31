@@ -10,6 +10,8 @@ Usage (on Kaggle, GPU):
     python scripts/run_experiment.py --device cuda --steps client
     python scripts/run_experiment.py --device cuda --steps client entity --compare client
     python scripts/run_experiment.py --device cuda --steps client entity dnorm --compare client+entity
+    python scripts/run_experiment.py --device cuda --steps client entity --params learning_rate=0.1 \
+        --compare client+entity                         # tuning: same features, other parameters
 
 Steps always run in the order of fraud.features.pipeline.STEPS, whatever
 order they are given in.
@@ -29,6 +31,7 @@ from fraud.features.client import add_client_features
 from fraud.features.pipeline import STEPS, build_features, ordered_steps, steps_name
 from fraud.metrics import score
 from fraud.split import time_split
+from fraud.tuning import config_name, parse_params
 
 
 def segment_scores(valid: pd.DataFrame, prob: np.ndarray, n_prev: pd.Series) -> pd.DataFrame:
@@ -61,6 +64,9 @@ def compare(log: pd.DataFrame, reference: str) -> pd.DataFrame:
             f"d_roc vs {reference}": d_roc.mean() if len(seeds) else np.nan,
             f"d_pr vs {reference}": d_pr.mean() if len(seeds) else np.nan,
             "pr_wins": f"{(d_pr > 0).sum()}/{len(seeds)}",
+            "best_iter": runs["best_iteration"].mean(),
+            # Older log rows have no training time.
+            "minutes": runs["seconds"].mean() / 60 if "seconds" in runs else np.nan,
         })
     return pd.DataFrame(rows).set_index("steps")
 
@@ -75,9 +81,12 @@ def main() -> None:
                         help="XGBoost random_state values (default: 0 1 2).")
     parser.add_argument("--compare", default="baseline",
                         help="Logged configuration to compare against, e.g. 'client'.")
+    parser.add_argument("--params", nargs="*", default=[],
+                        help="XGBoost overrides as key=value, e.g. learning_rate=0.1 max_depth=6.")
     args = parser.parse_args()
     try:
         ordered_steps(args.steps)
+        params = parse_params(args.params)
     except ValueError as err:
         parser.error(str(err))
 
@@ -95,7 +104,7 @@ def main() -> None:
     if dropped:
         print(f"Dropped raw columns: {', '.join(dropped)}")
     split = time_split(df)
-    steps = steps_name(args.steps)
+    steps = config_name(steps_name(args.steps), params)
 
     log_path = settings.processed_dir / "experiments.csv"
     pred_dir = settings.processed_dir / "predictions"
@@ -104,10 +113,11 @@ def main() -> None:
 
     for seed in args.seeds:
         start = time.perf_counter()
-        result = train_baseline(split, device=args.device, verbose=False, random_state=seed)
+        result = train_baseline(split, device=args.device, verbose=False, random_state=seed, **params)
+        seconds = time.perf_counter() - start
         s = result.valid_scores
         print(f"seed {seed}: ROC-AUC {s.roc_auc:.4f} | PR-AUC {s.pr_auc:.4f} | "
-              f"best iteration {result.best_iteration} | {time.perf_counter() - start:.0f}s")
+              f"best iteration {result.best_iteration} | {seconds:.0f}s")
 
         segments.append(segment_scores(split.valid, result.valid_prob, n_prev))
         # total_gain, not "gain": XGBoost's "gain" is the average per split.
@@ -132,6 +142,7 @@ def main() -> None:
             "roc_auc": round(s.roc_auc, 4),
             "pr_auc": round(s.pr_auc, 4),
             "pr_lift": round(s.pr_lift, 2),
+            "seconds": round(seconds),
         }])
         log = pd.concat([pd.read_csv(log_path), row]) if log_path.exists() else row
         log.to_csv(log_path, index=False)
