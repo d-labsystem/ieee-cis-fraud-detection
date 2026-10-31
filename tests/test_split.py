@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from fraud.data.load import SECONDS_PER_DAY, add_time_features
-from fraud.split import summarize, time_split
+from fraud.split import scenario_split, summarize, time_split
 
 LAST_DAY = 182  # last day in the real train data
 
@@ -75,3 +75,24 @@ def test_summary_numbers(df):
     assert (valid.n_transactions, valid.n_frauds) == (30, 3)
     assert (test.n_transactions, test.n_frauds) == (32, 3)
     assert (test.first_day, test.last_day) == (151, LAST_DAY)
+
+
+@pytest.mark.parametrize(
+    ("name", "train_days", "valid_days", "n_test"),
+    [
+        ("main", (1, 120), (121, 150), 32),
+        ("valid3", (1, 90), (91, 120), 62),
+        ("gap", (1, 90), (121, 150), 32),
+        ("recent3", (31, 120), (121, 150), 32),
+    ],
+)
+def test_scenarios(df, name, train_days, valid_days, n_test):
+    split = scenario_split(df, name)
+    assert (split.train["day"].min(), split.train["day"].max()) == train_days
+    assert (split.valid["day"].min(), split.valid["day"].max()) == valid_days
+    assert len(split.test) == n_test
+
+
+def test_unknown_scenario_raises(df):
+    with pytest.raises(ValueError, match="Unknown scenario"):
+        scenario_split(df, "nope")

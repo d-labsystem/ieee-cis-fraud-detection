@@ -12,6 +12,8 @@ Usage (on Kaggle, GPU):
     python scripts/run_experiment.py --device cuda --steps client entity dnorm --compare client+entity
     python scripts/run_experiment.py --device cuda --steps client entity --params learning_rate=0.1 \
         --compare client+entity                         # tuning: same features, other parameters
+    python scripts/run_experiment.py --device cuda --steps client entity --scenario valid3 \
+        --compare client+entity~valid3                  # robustness: another split (fraud.split.SCENARIOS)
 
 Steps always run in the order of fraud.features.pipeline.STEPS, whatever
 order they are given in.
@@ -30,7 +32,7 @@ from fraud.config import get_settings
 from fraud.features.client import add_client_features
 from fraud.features.pipeline import STEPS, build_features, ordered_steps, steps_name
 from fraud.metrics import score
-from fraud.split import time_split
+from fraud.split import SCENARIOS, scenario_split
 from fraud.tuning import config_name, parse_params
 
 
@@ -83,6 +85,8 @@ def main() -> None:
                         help="Logged configuration to compare against, e.g. 'client'.")
     parser.add_argument("--params", nargs="*", default=[],
                         help="XGBoost overrides as key=value, e.g. learning_rate=0.1 max_depth=6.")
+    parser.add_argument("--scenario", choices=list(SCENARIOS), default="main",
+                        help="Which months to train / validate on (default: main = 0-3 / 4).")
     args = parser.parse_args()
     try:
         ordered_steps(args.steps)
@@ -103,8 +107,10 @@ def main() -> None:
     dropped = sorted(raw_columns - set(df.columns))
     if dropped:
         print(f"Dropped raw columns: {', '.join(dropped)}")
-    split = time_split(df)
+    split = scenario_split(df, args.scenario)
     steps = config_name(steps_name(args.steps), params)
+    if args.scenario != "main":
+        steps += f"~{args.scenario}"
 
     log_path = settings.processed_dir / "experiments.csv"
     pred_dir = settings.processed_dir / "predictions"

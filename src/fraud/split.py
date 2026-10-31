@@ -94,3 +94,35 @@ def summarize(split: Split) -> list[PartSummary]:
         )
         for name, part in (("train", split.train), ("valid", split.valid), ("test", split.test))
     ]
+
+
+@dataclass(frozen=True)
+class Scenario:
+    """A split plus months left out entirely (neither trained nor scored on)."""
+
+    train: tuple[int, ...]
+    valid: tuple[int, ...]
+    test: tuple[int, ...]
+    skip: tuple[int, ...] = ()
+
+
+# Phase 7 robustness checks. Features are built on the full table first, so a
+# skipped month still feeds the causal history features of later months, as
+# it would in production: its transactions exist, only its labels are unused.
+SCENARIOS: dict[str, Scenario] = {
+    "main": Scenario(TRAIN_MONTHS, VALID_MONTHS, TEST_MONTHS),
+    # A second validation month, to check that month-4 decisions transfer.
+    "valid3": Scenario((0, 1, 2), (3,), (4, 5, 6)),
+    # Labels arrive late: train on months 0-2, score month 4 one month later.
+    "gap": Scenario((0, 1, 2), (4,), (5, 6), skip=(3,)),
+    # Same amount of training data as "gap" but up to date: the pair isolates
+    # the cost of the one-month label delay.
+    "recent3": Scenario((1, 2, 3), (4,), (5, 6), skip=(0,)),
+}
+
+
+def scenario_split(df: pd.DataFrame, name: str) -> Split:
+    if name not in SCENARIOS:
+        raise ValueError(f"Unknown scenario {name!r}; choose from {sorted(SCENARIOS)}.")
+    s = SCENARIOS[name]
+    return time_split(df[~df["month"].isin(s.skip)], s.train, s.valid, s.test)
