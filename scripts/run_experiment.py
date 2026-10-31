@@ -11,13 +11,13 @@ Usage (on Kaggle, GPU):
     python scripts/run_experiment.py --device cuda --steps client entity --compare client
     python scripts/run_experiment.py --device cuda --steps client entity dnorm --compare client+entity
 
-Steps always run in the order of STEPS below, whatever order they are given in.
+Steps always run in the order of fraud.features.pipeline.STEPS, whatever
+order they are given in.
 """
 
 import argparse
 import time
 from datetime import datetime
-from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -26,25 +26,9 @@ import pandas as pd
 from fraud.baseline import TARGET, train_baseline
 from fraud.config import get_settings
 from fraud.features.client import add_client_features
-from fraud.features.clock import add_hour
-from fraud.features.dnorm import add_dnorm_features
-from fraud.features.entity import add_entity_features
-from fraud.features.missing import add_missing_features
-from fraud.features.vreduce import drop_correlated_v
+from fraud.features.pipeline import STEPS, build_features, ordered_steps, steps_name
 from fraud.metrics import score
 from fraud.split import time_split
-
-# Order matters: "client" and "missing" read raw D columns, which
-# "dnorm_replace" drops.
-STEPS = {
-    "client": add_client_features,
-    "entity": add_entity_features,
-    "missing": add_missing_features,
-    "dnorm": add_dnorm_features,
-    "dnorm_replace": partial(add_dnorm_features, replace=True),
-    "vreduce": drop_correlated_v,
-    "hour": add_hour,
-}
 
 
 def segment_scores(valid: pd.DataFrame, prob: np.ndarray, n_prev: pd.Series) -> pd.DataFrame:
@@ -92,9 +76,10 @@ def main() -> None:
     parser.add_argument("--compare", default="baseline",
                         help="Logged configuration to compare against, e.g. 'client'.")
     args = parser.parse_args()
-    if {"dnorm", "dnorm_replace"} <= set(args.steps):
-        parser.error("choose either dnorm or dnorm_replace, not both")
-    steps_in_order = [s for s in STEPS if s in args.steps]
+    try:
+        ordered_steps(args.steps)
+    except ValueError as err:
+        parser.error(str(err))
 
     settings = get_settings()
     path = args.path or settings.processed_dir / "train_raw.parquet"
@@ -104,18 +89,13 @@ def main() -> None:
     # "client" step adds it), so every run, the baseline too, gets the report.
     n_prev = add_client_features(df)["uid_n_prev"]
 
-    # Features are built on the full table before splitting. That is safe only
-    # because every step is causal (uses earlier rows only).
-    for step in steps_in_order:
-        start = time.perf_counter()
-        df = STEPS[step](df)
-        print(f"Step {step!r}: {time.perf_counter() - start:.1f}s")
+    df = build_features(df, args.steps, verbose=True)
     new_columns = [c for c in df.columns if c not in raw_columns]
     dropped = sorted(raw_columns - set(df.columns))
     if dropped:
         print(f"Dropped raw columns: {', '.join(dropped)}")
     split = time_split(df)
-    steps = "+".join(steps_in_order) or "baseline"
+    steps = steps_name(args.steps)
 
     log_path = settings.processed_dir / "experiments.csv"
     pred_dir = settings.processed_dir / "predictions"
