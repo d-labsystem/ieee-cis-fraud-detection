@@ -86,3 +86,26 @@ def cost_curve(
 def best_alerts(curve: pd.DataFrame) -> pd.Series:
     """The row of ``cost_curve`` with the lowest total cost."""
     return curve.loc[curve["total"].idxmin()]
+
+
+def policy_outcome(
+    y: np.ndarray,
+    rank_score: np.ndarray,
+    amount: np.ndarray,
+    alerts: int,
+    review_cost: float,
+    false_alarm_cost: float,
+) -> dict:
+    """Alert on the ``alerts`` highest ``rank_score`` rows; what is caught and the total cost.
+
+    ``rank_score`` can be any ranking (model score, expected benefit), so
+    policies that rank differently are costed the same way as ``cost_curve``.
+    """
+    y, amount = np.asarray(y), np.asarray(amount, dtype=float)
+    top = np.argsort(-np.asarray(rank_score), kind="stable")[:alerts]
+    fraud = y[top] == 1
+    caught = amount[top][fraud].sum()
+    return {"alerts": alerts, "share_%": 100 * alerts / len(y), "frauds_caught": int(fraud.sum()),
+            "recall": fraud.sum() / y.sum(), "fraud_$_caught": caught,
+            "total_cost_$": (review_cost * alerts + false_alarm_cost * (~fraud).sum()
+                             + amount[y == 1].sum() - caught)}

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fraud.threshold import best_alerts, capacity_table, cost_curve
+from fraud.threshold import best_alerts, capacity_table, cost_curve, policy_outcome
 
 # Scores already in descending order to keep the expected values readable.
 Y = np.array([1, 1, 0, 1, 0, 0, 0, 1, 0, 0])
@@ -51,3 +51,13 @@ def test_best_alerts_with_expensive_reviews():
     # nobody costs 1000, and no k does better.
     best = best_alerts(cost_curve(Y, PROB, AMT, review_cost=300, false_alarm_cost=0))
     assert best["alerts"] == 0
+
+
+def test_policy_outcome_matches_cost_curve():
+    curve = cost_curve(Y, PROB, AMT, review_cost=5, false_alarm_cost=20)
+    for k in (0, 3, 10):
+        out = policy_outcome(Y, PROB, AMT, k, review_cost=5, false_alarm_cost=20)
+        assert out["total_cost_$"] == pytest.approx(curve.loc[k, "total"])
+    # Another ranking: alert on the single largest amount (the fraud at 0.20).
+    out = policy_outcome(Y, AMT, AMT, 1, review_cost=5, false_alarm_cost=20)
+    assert out["frauds_caught"] == 1 and out["fraud_$_caught"] == 650

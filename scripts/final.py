@@ -33,16 +33,7 @@ from fraud.features.pipeline import FINAL_STEPS, build_features, steps_name
 from fraud.final import N_TREES, SEEDS, ensemble_predict, train_ensemble
 from fraud.metrics import score
 from fraud.split import TEST_MONTHS, TRAIN_MONTHS, VALID_MONTHS, time_split
-from fraud.threshold import best_alerts, capacity_table, cost_curve
-
-
-def policy(y, rank_score, amt, k: int, review_cost: float, false_alarm_cost: float) -> dict:
-    top = np.argsort(-rank_score, kind="stable")[:k]
-    fraud = y[top] == 1
-    caught = amt[top][fraud].sum()
-    return {"alerts": k, "share_%": 100 * k / len(y), "frauds_caught": int(fraud.sum()),
-            "recall": fraud.sum() / y.sum(), "fraud_$_caught": caught,
-            "total_cost_$": review_cost * k + false_alarm_cost * (~fraud).sum() + amt[y == 1].sum() - caught}
+from fraud.threshold import best_alerts, capacity_table, cost_curve, policy_outcome
 
 
 def main() -> None:
@@ -80,6 +71,8 @@ def main() -> None:
     platt = fit_platt(y_valid, valid_prob)
     (out_dir / "platt.json").write_text(json.dumps(asdict(platt), indent=2))
     review_share = best_alerts(cost_curve(y_valid, valid_prob, valid_amt, *costs))["alerts"] / len(y_valid)
+    (out_dir / "policy.json").write_text(json.dumps(
+        {"review_share": review_share, "review_cost": costs[0], "false_alarm_cost": costs[1]}, indent=2))
     print(f"Platt: slope {platt.slope:.3f}, intercept {platt.intercept:+.3f} | "
           f"cost-optimal review share on month 4: {review_share:.2%}")
 
@@ -139,10 +132,10 @@ def main() -> None:
 
     benefit = expected_benefit(test_p, amt, *costs)
     policies = {
-        "no model": policy(y, test_prob, amt, 0, *costs),
+        "no model": policy_outcome(y, test_prob, amt, 0, *costs),
         f"score, review share from month 4 ({review_share:.1%})":
-            policy(y, test_prob, amt, round(review_share * len(y)), *costs),
-        "expected $ > 0 (Platt)": policy(y, benefit, amt, int((benefit > 0).sum()), *costs),
+            policy_outcome(y, test_prob, amt, round(review_share * len(y)), *costs),
+        "expected $ > 0 (Platt)": policy_outcome(y, benefit, amt, int((benefit > 0).sum()), *costs),
     }
     print(f"\nAlert policies at ${args.review_cost:g}/review + ${args.false_alarm_cost:g}/false alarm:")
     print(pd.DataFrame(policies).T.to_string(float_format="{:,.3f}".format))

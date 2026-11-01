@@ -72,14 +72,20 @@ same recipe trained on months 0–3, so no test label shaped any choice.
 | Final model (months 0–4) | **0.6482** | **0.9355** |
 | Same recipe on months 0–3 (one month staler) | 0.5822 | 0.9123 |
 
+![Weekly PR-AUC on the test months: final vs staler model, and new vs known-fraud clients](docs/figures/decay.png)
+
 | Alert policy on the test months | Alerts | Fraud $ caught | Total cost | Saved |
 |---|---|---|---|---|
 | No model | 0 | $0 | $487k | — |
 | Review top 7.5% (share chosen on month 4) | 6,950 | $334k | $219k | 55% |
 | **Expected $ > 0, Platt** | 6,523 | **$390k** | **$161k** | **67%** |
 
+![Total cost against share of traffic reviewed, with both alert policies marked](docs/figures/cost.png)
+
 Calibration transferred (ECE 0.002; predicted fraud rate 3.58% vs actual 3.48%). New clients — 55% of rows,
 75% of frauds — scored PR-AUC 0.594, the same as on validation.
+
+<img src="docs/figures/reliability.png" alt="Reliability diagram: raw scores vs Platt-scaled on the test months" width="420">
 
 **Takeaway:** validation was an honest estimate, and the largest lever left is retraining frequency, not model
 capacity.
