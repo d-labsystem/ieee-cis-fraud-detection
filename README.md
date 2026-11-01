@@ -11,6 +11,7 @@ held-out test months exactly once.
 | Top 2% of traffic reviewed | 47% of frauds caught at 82% precision |
 | Fraud + review cost vs. no model ($3/review, $10/false alarm) | **−67%** |
 | Value of one month fresher labels | **+0.066 PR-AUC** — more than all hyperparameter tuning |
+| Kaggle late submission (ROC-AUC) | public 0.940 / private 0.909 |
 
 ## Why the evaluation is the point
 
@@ -83,9 +84,21 @@ Calibration transferred (ECE 0.002; predicted fraud rate 3.58% vs actual 3.48%).
 **Takeaway:** validation was an honest estimate, and the largest lever left is retraining frequency, not model
 capacity.
 
-The Kaggle submission (`scripts/submit.py`) retrains the same recipe on all six months. The competition's test
-period starts ~30 days after the last label, so it measures the label-delay scenario on ROC-AUC only.
-<!-- Kaggle leaderboard: public ROC-AUC _____ / private _____ -->
+### Kaggle leaderboard
+
+The submission (`scripts/submit.py`) retrains the same recipe, with nothing re-chosen, on all six labelled
+months. The competition's test period starts ~30 days after the last label and runs ~6 months, and it is scored
+on ROC-AUC only.
+
+| Kaggle test (late submission) | ROC-AUC |
+|---|---|
+| Public leaderboard (~20%, earlier part of the period) | **0.9403** |
+| Private leaderboard (~80%, later) | **0.9091** |
+
+The two scores tell the same story as the drift analysis: close to the last label the model matches its test
+score (0.936), and with months of distance from fresh labels it slides to 0.909. Top private scores (~0.946)
+relied on aggregating each client over the *whole* test period, future transactions included. That is fine for a
+static leaderboard, but it is unavailable when you score at transaction time, and this project's features are causal by design.
 
 ## Repository
 
