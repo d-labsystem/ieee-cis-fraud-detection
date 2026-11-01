@@ -2,7 +2,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from fraud.drift import adversarial_validation, psi, psi_table, segment_week_scores, week_scores
+from fraud.drift import (
+    adversarial_validation,
+    client_segments,
+    psi,
+    psi_table,
+    segment_week_scores,
+    week_scores,
+)
 
 
 @pytest.fixture(scope="module")
@@ -94,3 +101,16 @@ def test_week_scores_keeps_single_class_weeks():
     out = week_scores(y, np.linspace(0, 1, 10), day)
     assert out["transactions"].tolist() == [5, 5]
     assert np.isnan(out.loc[1, "roc_auc"])
+
+
+def test_client_segments_use_known_months_only():
+    df = pd.DataFrame({
+        "card1": [1, 2, 3, 1, 2, 3, 4, 3],
+        "addr1": [10.0] * 8,
+        "D1n": [5.0] * 8,
+        "month": [0, 0, 0, 4, 4, 4, 4, 5],
+        "isFraud": [0, 1, 0, 0, 0, 1, 1, 1],
+    })
+    seg = client_segments(df, known_months=(0,), target_months=(4,))
+    assert seg.index.tolist() == [3, 4, 5, 6]
+    assert seg.tolist() == ["known, no fraud", "known, fraud", "known, no fraud", "new client"]

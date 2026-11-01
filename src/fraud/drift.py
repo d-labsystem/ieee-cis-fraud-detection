@@ -18,6 +18,7 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import roc_auc_score
 
+from fraud.features.client import client_id
 from fraud.metrics import score
 
 _MISSING, _UNSEEN = "<missing>", "<unseen>"
@@ -126,3 +127,25 @@ def segment_week_scores(
         scores["share_of_week"] = scores["transactions"] / rows_per_week.reindex(scores.index)
         parts.append(scores.assign(segment=name).set_index("segment", append=True))
     return pd.concat(parts).sort_index()
+
+
+SEGMENTS = ("new client", "known, no fraud", "known, fraud")
+
+
+def client_segments(df: pd.DataFrame, known_months, target_months, target: str = "isFraud") -> pd.Series:
+    """What the labelled months knew about each target-month row's client.
+
+    ``new client``: never seen in ``known_months``; ``known, fraud``: seen
+    with at least one fraud label there; ``known, no fraud``: seen, never
+    fraud. Only ``known_months`` labels are read. ``df`` needs the client key
+    columns (card1, addr1, D1n).
+    """
+    uid = pd.Series(client_id(df), index=df.index)
+    known = df["month"].isin(known_months)
+    seen = set(uid[known])
+    fraud_seen = set(uid[known & (df[target] == 1)])
+    u = uid[df["month"].isin(target_months)]
+    return pd.Series(
+        np.select([u.isin(fraud_seen), u.isin(seen)], [SEGMENTS[2], SEGMENTS[1]], SEGMENTS[0]),
+        index=u.index,
+    )
