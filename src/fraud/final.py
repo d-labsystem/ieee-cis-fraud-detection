@@ -14,6 +14,11 @@ import xgboost as xgb
 
 from fraud.baseline import PARAMS, TARGET
 
+# Validation best iterations at depth 12 were 2078 / 1614 / 1910 (mean ~1870)
+# on 4 months of data; the final model trains on 5, so slightly more trees.
+N_TREES = 2100
+SEEDS: tuple[int, ...] = (0, 1, 2)
+
 
 def train_fixed(
     train: pd.DataFrame, features: list[str], n_estimators: int, device: str = "cpu", seed: int = 0

@@ -7,6 +7,8 @@ from fraud.data.sample import IDENTITY_FILE, TRANSACTION_FILE
 TRANSACTION_PARQUET = "transactions.parquet"
 IDENTITY_PARQUET = "identity.parquet"
 KEY = "TransactionID"
+TEST_TRANSACTION_FILE = "test_transaction.csv"
+TEST_IDENTITY_FILE = "test_identity.csv"
 
 SECONDS_PER_DAY = 86_400
 DAYS_PER_MONTH = 30
@@ -69,3 +71,25 @@ def add_time_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def load_dataset(raw_dir: Path) -> pd.DataFrame:
     return add_time_features(downcast(load_raw(raw_dir)))
+
+
+def load_competition(raw_dir: Path) -> pd.DataFrame:
+    """Kaggle's train and test files as one table, test rows with isFraud NaN.
+
+    One table because the feature steps look back in time: a test row's client
+    and entity features need that client's training rows. Downcasting after the
+    concat gives train and test the same category codes.
+    """
+    train = load_raw(raw_dir)
+    test_transactions = pd.read_csv(raw_dir / TEST_TRANSACTION_FILE)
+    # The test identity file names its columns id-01 ... id-38, train id_01 ...
+    test_identity = pd.read_csv(raw_dir / TEST_IDENTITY_FILE).rename(
+        columns=lambda c: c.replace("id-", "id_"))
+    test = test_transactions.merge(test_identity, on=KEY, how="left", validate="one_to_one")
+
+    if set(test.columns) != set(train.columns) - {"isFraud"}:
+        raise ValueError("Test columns differ from train columns (other than isFraud).")
+    if test["TransactionDT"].min() <= train["TransactionDT"].max():
+        raise ValueError("Test transactions must all come after the training ones.")
+    both = pd.concat([train, test[train.columns.drop("isFraud")]], ignore_index=True)
+    return add_time_features(downcast(both))

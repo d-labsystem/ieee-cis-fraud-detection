@@ -4,9 +4,12 @@ import pytest
 
 from fraud.data.load import (
     IDENTITY_PARQUET,
+    TEST_IDENTITY_FILE,
+    TEST_TRANSACTION_FILE,
     TRANSACTION_PARQUET,
     add_time_features,
     downcast,
+    load_competition,
     load_raw,
 )
 from fraud.data.sample import IDENTITY_FILE, TRANSACTION_FILE
@@ -126,3 +129,32 @@ def test_time_boundaries(seconds, day, month):
 def test_time_before_first_day_raises():
     with pytest.raises(ValueError, match="86,400"):
         add_time_features(pd.DataFrame({"TransactionDT": [86_399]}))
+
+# ---------- load_competition ----------
+
+
+def _write_competition(tmp_path, test_dt=(200_000, 260_000)):
+    _transactions().to_csv(tmp_path / TRANSACTION_FILE, index=False)
+    _identity().assign(id_31=["chrome 65"]).to_csv(tmp_path / IDENTITY_FILE, index=False)
+    pd.DataFrame({"TransactionID": [4, 5], "TransactionDT": list(test_dt),
+                  "TransactionAmt": [5.0, 6.0]}).to_csv(tmp_path / TEST_TRANSACTION_FILE, index=False)
+    pd.DataFrame({"TransactionID": [5], "DeviceType": ["desktop"], "id-31": ["chrome 66"]}).to_csv(
+        tmp_path / TEST_IDENTITY_FILE, index=False)
+
+
+def test_load_competition_stacks_test_after_train(tmp_path):
+    _write_competition(tmp_path)
+    df = load_competition(tmp_path)
+    assert df["TransactionID"].tolist() == [1, 2, 3, 4, 5]
+    assert df["isFraud"].iloc[3:].isna().all()
+    assert df["isFraud"].iloc[:3].tolist() == [0, 1, 0]
+    # id-31 in the test file is renamed to train's id_31 and shares its categories.
+    assert df["id_31"].tolist()[1::3] == ["chrome 65", "chrome 66"]
+    assert isinstance(df["id_31"].dtype, pd.CategoricalDtype)
+    assert df["day"].tolist() == [1, 1, 2, 2, 3]
+
+
+def test_load_competition_rejects_overlapping_time(tmp_path):
+    _write_competition(tmp_path, test_dt=(100_000, 260_000))
+    with pytest.raises(ValueError, match="after"):
+        load_competition(tmp_path)

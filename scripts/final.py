@@ -30,15 +30,10 @@ from fraud.calibration import calibration_scores, expected_benefit, fit_platt
 from fraud.config import get_settings
 from fraud.drift import SEGMENTS, client_segments, segment_week_scores, week_scores
 from fraud.features.pipeline import FINAL_STEPS, build_features, steps_name
-from fraud.final import ensemble_predict, train_ensemble
+from fraud.final import N_TREES, SEEDS, ensemble_predict, train_ensemble
 from fraud.metrics import score
 from fraud.split import TEST_MONTHS, TRAIN_MONTHS, VALID_MONTHS, time_split
 from fraud.threshold import best_alerts, capacity_table, cost_curve
-
-# Validation best iterations at depth 12 were 2078 / 1614 / 1910 (mean ~1870)
-# on 4 months of data; the final model trains on 5, so slightly more trees.
-N_TREES = 2100
-SEEDS = (0, 1, 2)
 
 
 def policy(y, rank_score, amt, k: int, review_cost: float, false_alarm_cost: float) -> dict:
