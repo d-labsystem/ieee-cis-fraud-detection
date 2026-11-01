@@ -65,7 +65,8 @@ without changing the ranking; isotonic created ties and lost PR-AUC. With calibr
 
 The final model is the frozen recipe trained on months 0–4 with a fixed 2,100 trees (no month left to
 early-stop on), averaged over 3 seeds. Its Platt calibration and review share were fitted on month 4 using the
-same recipe trained on months 0–3, so no test label shaped any choice.
+same recipe trained on months 0–3, so no test label shaped any choice. Rerunning the whole pipeline from the
+raw CSVs reproduced every test number below to the last digit (GPU XGBoost, fixed seeds).
 
 | Test months 5–6 (92,427 transactions, 3,213 frauds) | PR-AUC | ROC-AUC |
 |---|---|---|

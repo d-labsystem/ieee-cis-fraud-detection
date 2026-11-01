@@ -101,7 +101,7 @@ def cost_figure(y, prob, platt_p, amt, policy: dict, path: Path) -> None:
     ax.annotate(f"no model: \\${no_model / 1e3:.0f}k of fraud lost", (1, no_model / 1e3),
                 xytext=(0, 6), textcoords="offset points", ha="left", color=MUTED)
     for p, color, text, offset in [
-        (by_share, BLUE, f"share chosen on month 4 ({by_share['share_%']:.1f}%)", (12, 10)),
+        (by_share, BLUE, f"month-4 review share ({by_share['share_%']:.1f}%)", (10, 40)),
         (by_dollar, ORANGE, f"expected \\$ > 0, Platt ({by_dollar['share_%']:.1f}%)", (12, -18)),
     ]:
         ax.scatter(p["share_%"], p["total_cost_$"] / 1e3, s=70, color=color, zorder=3,
@@ -109,7 +109,8 @@ def cost_figure(y, prob, platt_p, amt, policy: dict, path: Path) -> None:
         saved = 1 - p["total_cost_$"] / no_model
         ax.annotate(f"{text}\n\\${p['total_cost_$'] / 1e3:.0f}k, saves {saved:.0%}",
                     (p["share_%"], p["total_cost_$"] / 1e3), xytext=offset,
-                    textcoords="offset points", color=INK)
+                    textcoords="offset points", color=INK,
+                    arrowprops={"arrowstyle": "-", "color": MUTED, "linewidth": 0.8})
     ax.set_xlabel("share of transactions reviewed (%)")
     ax.set_ylabel("total cost (\\$k)")
     ax.set_ylim(0, no_model / 1e3 * 1.1)
@@ -122,7 +123,7 @@ def cost_figure(y, prob, platt_p, amt, policy: dict, path: Path) -> None:
 
 def reliability_figure(y, prob, platt_p, path: Path) -> None:
     fig, ax = plt.subplots(figsize=(5.5, 5.2))
-    lims = (5e-4, 1)
+    lims = (1e-4, 1)
     ax.plot(lims, lims, color=MUTED, linestyle="--", linewidth=1.2, label="perfect calibration")
     for name, p, color in [("raw scores", prob, ORANGE), ("after Platt scaling", platt_p, BLUE)]:
         table = reliability_table(y, p)
